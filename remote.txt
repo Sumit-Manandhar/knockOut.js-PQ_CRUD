@@ -1,0 +1,148 @@
+CollectorAreaGraceGrid: function (actionName, control) {
+                const allData = {
+                    location: "remote",
+                    contentType: "application/json; charset=UTF-8",
+                    dataType: "JSON",
+                    method: "GET",
+                    url: "/CollectorAreaGraceSetup/" + methodName(actionName),
+                    recIndx: "Id",
+                    beforeSend: function (jqXHR, settings) {
+                        return true;
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        console.error(errorThrown);
+                    },
+                    getData: function (result) {
+                        if (result && result.Success) {
+                            const data = result.Data;
+                            return { curPage: result.CurrentPage, totalRecords: result.TotalRecords, data: data };
+                        }
+                        else {
+                            Empower.message("Warning", result.Message || "Warning ! - Error Occured...!!!");
+                            return { curPage: 0, totalRecords: 0, data: [] };
+                        }
+                    }
+                };
+
+                const options = Object.assign({}, pqOptions);
+
+                if (actionName == "UA") {
+                    options.colModel = [
+                        //{ title: "Effect Date", dataIndx: "EffectDate", width: "40%" },
+                        {
+                            title: "Effect Date", align: "left", render: function (ui) {
+                                return `<span onclick='obj.editRow("${ui.rowData.Id}",true)'>${ui.rowData.EffectDate}</span>`
+                            }, width: "40%"
+                        },
+                        {
+                            title: "Action", align: "center", render: function (ui) {
+                                return `<button type='button' onclick='obj.editRow("${ui.rowData.Id}",true)'>Edit</button> <button type='button' onclick='obj.deleteRow("${ui.rowData.Id}","UA")'>Delete</button>`
+                            }, width: "60%"
+                        },
+                    ];
+                } else if (actionName == "A") {
+                    options.colModel = [
+                        //{ title: "Effect Date", dataIndx: "EffectDate", width: "40%" },
+                        {
+                            title: "Effect Date", align: "left", render: function (ui) {
+                                return `<span onclick='obj.editRow("${ui.rowData.Id}",false)'>${ui.rowData.EffectDate}</span>`
+                            }, width: "40%"
+                        },
+                        {
+                            title: "Action", align: "center", render: function (ui) {
+                                return `<button type='button' onclick='obj.deleteRow("${ui.rowData.Id}","A")'>Revert</button>`
+                            }, width: "60%"
+                        },
+
+                    ];
+                }
+                options.dataModel = allData;
+
+                $(control).pqGrid(options);
+            },
+
+
+
+----------------------------------------
+
+ [HttpGet] //GetUnApprovedList
+        public JsonResult GetUnApprovedList(int pq_rpp, int pq_curpage)
+        {
+            ReturnResult response = new ReturnResult();
+
+            try
+            {
+                CollectorAreaGraceUserGlobalData requestData = new CollectorAreaGraceUserGlobalData
+                {
+                    BrCode = Emp_Session._BR_CODE,
+                    UserId = Emp_Session._UserMasterId,
+                    TransactionDate = Emp_Session._DAYEND_DATE,
+                    RowPerPage = pq_rpp,
+                    CurrentPage = pq_curpage
+                };
+                SearchCollectorAreaGraceResult<CollectorAreaGraceMasterData> searchResult = bl.GetList(requestData, 0); // 0 for Unapproved
+
+                response.Data = searchResult.Records;
+                return Json(new { Success = true, response.Data, CurrentPage = pq_curpage, TotalRecords = searchResult.TotalRecordCount }, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                string message = this.LogException(ex);
+                response.Success = false;
+                response.Message = message;
+            }
+            return Json(response, JsonRequestBehavior.AllowGet);
+        }
+
+
+---------------------------------------
+ public SearchCollectorAreaGraceResult<CollectorAreaGraceMasterData> GetList(CollectorAreaGraceUserGlobalData requestData, int statusType)
+        {
+            int totalRecords = 0;
+            List<CollectorAreaGraceMasterData> list = new List<CollectorAreaGraceMasterData>();
+
+            using (SqlConnection connection = Connection())
+            {
+                using (SqlCommand cmd = new SqlCommand())
+                {
+                    string qry = @"SELECT TRAN_ID,dbo.getDisplayDate(EFFECT_DATE) AS EFFECT_DATE
+FROM COLLECTOR_AREA_GRACE_MAST 
+WHERE [STATUS]=@STATUS
+ORDER BY EFFECT_DATE,TRAN_ID DESC
+OFFSET @SKIP_COUNT ROWS
+FETCH NEXT @ROW_COUNT ROWS ONLY;
+SELECT COUNT('X') AS TOTALRECORDS FROM COLLECTOR_AREA_GRACE_MAST WHERE [STATUS]= @STATUS;";
+                    cmd.Connection = connection;
+                    cmd.CommandType = CommandType.Text;
+                    cmd.Parameters.Add("@SKIP_COUNT", SqlDbType.Int).Value = (requestData.CurrentPage - 1) * requestData.RowPerPage;
+                    cmd.Parameters.Add("@ROW_COUNT", SqlDbType.Int).Value = requestData.RowPerPage;
+                    cmd.Parameters.Add("@STATUS", SqlDbType.Int).Value = statusType;
+                    cmd.CommandText = qry;
+
+                    using (SqlDataReader rdr = cmd.ExecuteReader())
+                    {
+                        if (rdr.HasRows)
+                        {
+                            while (rdr.Read())
+                            {
+                                list.Add(new CollectorAreaGraceMasterData
+                                {
+                                    Id = rdr.GetInt32(0).ToString(),
+                                    EffectDate = rdr.GetString(1),
+
+                                });
+                            }
+                        }
+                        if (rdr.NextResult() && rdr.HasRows && rdr.Read())
+                        {
+                            totalRecords = rdr.GetInt32(0);
+                        }
+                    }
+                }
+            }
+            return new SearchCollectorAreaGraceResult<CollectorAreaGraceMasterData>
+            {
+                Records = list,
+                TotalRecordCount = totalRecords
+            };
+        }

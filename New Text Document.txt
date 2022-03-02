@@ -1,0 +1,18 @@
+ <h1>PQ Knock Out Implementation</h1>
+
+        <div id="myForm" data-bind="with: MyModel">
+            <input type="text" data-bind="value: Name" id="txtName" />
+            <input type="text" data-bind="value: Age" id="txtAge" />
+            <select data-bind="
+        value: GenderId, 
+        options: $root.GenderList,
+        optionsValue: 'Value', 
+        optionsText: 'Text', 
+        optionsCaption: '---SELECT---'" id="ddlGender">
+        </select>
+
+            <button type="button" data-bind="event: {click: $root.SaveInformation}" id="btnAddInformation">Save</button>
+
+        </div>
+        <br />
+        <div style="width:500px;" id="demoGrid"></div>
